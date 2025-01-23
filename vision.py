@@ -1,39 +1,10 @@
-import pyttsx3
+from gtts import gTTS
+import tempfile
 from dotenv import load_dotenv
 import os
 import streamlit as st
 from PIL import Image
 import google.generativeai as genai
-import threading
-
-# Initialize the pyttsx3 engine
-engine = pyttsx3.init()
-lock = threading.Lock()  # Lock to synchronize access to the pyttsx3 engine
-
-# Function to convert text to speech in a separate thread
-def text_to_speech_thread(text, voice_gender):
-    with lock:  # Ensure only one thread accesses the engine at a time
-        voices = engine.getProperty("voices")
-        if voice_gender == "Male":
-            engine.setProperty("voice", voices[0].id)  # Male voice
-        else:
-            engine.setProperty("voice", voices[1].id)  # Female voice
-        engine.say(text)
-        engine.runAndWait()
-
-# Function to start text-to-speech
-def start_speech(text, voice_gender):
-    # Stop any ongoing speech
-    if st.session_state.speech_thread and st.session_state.speech_thread.is_alive():
-        with lock:
-            engine.stop()
-        st.session_state.speech_thread.join()
-
-    # Start a new speech thread
-    st.session_state.speech_thread = threading.Thread(
-        target=text_to_speech_thread, args=(text, voice_gender)
-    )
-    st.session_state.speech_thread.start()
 
 # Load environment variables
 load_dotenv()
@@ -59,6 +30,13 @@ def input_image_setup(uploaded_file):
         return image_parts
     else:
         raise FileNotFoundError("No file uploaded")
+
+# Function to convert text to speech using gTTS
+def start_speech(text):
+    tts = gTTS(text, lang="en")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
+        tts.save(fp.name)
+        st.audio(fp.name, format="audio/mp3")
 
 # Streamlit app initialization
 st.set_page_config(page_title="Tablet Info Summarizer", layout="centered", page_icon="💊")
@@ -98,10 +76,6 @@ st.markdown(
 # Initialize session state for the response text
 if "response_text" not in st.session_state:
     st.session_state.response_text = ""
-
-# Initialize session state for voice options
-if "speech_thread" not in st.session_state:
-    st.session_state.speech_thread = None
 
 # User inputs
 input = st.text_input(
@@ -152,9 +126,6 @@ if st.session_state.response_text:
     st.markdown("<h3 style='color:#ffd700;'>Tablet Information Summary</h3>", unsafe_allow_html=True)
     st.success(st.session_state.response_text)
 
-    # Voice options
-    voice_gender = st.radio("Select Voice Gender:", ["Male", "Female"], index=0, key="voice_gender")
-
     # Add "Voice" button
     if st.button("Voice"):
-        start_speech(st.session_state.response_text, voice_gender)
+        start_speech(st.session_state.response_text)
